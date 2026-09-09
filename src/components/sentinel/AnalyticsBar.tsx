@@ -15,7 +15,7 @@ export function AnalyticsBar({ result }: { result: AnalyzeResponse }) {
 
   return (
     <section>
-      <h2 className="label-tac mb-2 text-primary">[ Analytics Summary ]</h2>
+      <h2 className="label-tac mb-2 text-primary">[ Batch Analytics Summary ]</h2>
       <div className="flex flex-wrap gap-2">
         <Stat label="Total Contacts" value={result.total_detections} tone="text-primary" />
         <Stat label="High Priority" value={by("HIGH")} tone="text-prio-high" />

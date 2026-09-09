@@ -2,21 +2,25 @@ import { useRef, useState } from "react";
 import { formatBytes } from "@/lib/sentinel";
 
 interface Props {
-  file: File | null;
-  onFile: (f: File | null) => void;
+  files: File[];
+  onFiles: (files: File[]) => void;
   onRun: () => void;
+  onRetry: () => void;
   loading: boolean;
   progress: number;
+  completed: number;
   coldStart: boolean;
   error: string | null;
 }
 
 export function UploadPanel({
-  file,
-  onFile,
+  files,
+  onFiles,
   onRun,
+  onRetry,
   loading,
   progress,
+  completed,
   coldStart,
   error,
 }: Props) {
@@ -24,14 +28,14 @@ export function UploadPanel({
   const [drag, setDrag] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
 
-  const accept = (f: File | undefined) => {
-    if (!f) return;
-    if (!["image/png", "image/jpeg"].includes(f.type)) {
+  const accept = (incoming: File[]) => {
+    if (!incoming.length) return;
+    if (incoming.some((f) => !["image/png", "image/jpeg"].includes(f.type))) {
       setLocalError("UNSUPPORTED FORMAT — PNG OR JPG SONAR FRAMES ONLY.");
       return;
     }
     setLocalError(null);
-    onFile(f);
+    onFiles(incoming);
   };
 
   return (
@@ -51,7 +55,7 @@ export function UploadPanel({
         onDrop={(e) => {
           e.preventDefault();
           setDrag(false);
-          accept(e.dataTransfer.files?.[0]);
+          accept(Array.from(e.dataTransfer.files));
         }}
         className={`flex cursor-pointer flex-col items-center justify-center gap-2 border border-dashed px-4 py-10 text-center transition-colors ${
           drag
@@ -60,31 +64,36 @@ export function UploadPanel({
         }`}
       >
         <div className="text-2xl text-primary">⌁</div>
-        <p className="label-tac text-foreground">Drop sonar frame or click to browse</p>
-        <p className="label-tac">PNG / JPG</p>
+        <p className="label-tac text-foreground">Drop sonar frames or click to browse</p>
+        <p className="label-tac">PNG / JPG // MULTI-SELECT ENABLED</p>
         <input
           ref={inputRef}
           type="file"
+          multiple
           accept="image/png,image/jpeg"
           className="hidden"
-          onChange={(e) => accept(e.target.files?.[0])}
+          onChange={(e) => accept(Array.from(e.target.files ?? []))}
         />
       </div>
 
-      {file && (
-        <div className="mt-3 flex items-center justify-between border border-border bg-panel-raised/60 px-3 py-2">
-          <span className="truncate text-xs tracking-wider text-foreground">{file.name}</span>
-          <span className="label-tac shrink-0 pl-3">{formatBytes(file.size)}</span>
+      {files.length > 0 && (
+        <div className="mt-3 max-h-32 space-y-px overflow-auto border border-border bg-panel-raised/30 p-1">
+          {files.map((file, index) => (
+            <div key={`${file.name}-${index}`} className="flex items-center justify-between px-2 py-1.5 text-xs">
+              <span className="truncate text-foreground">{String(index + 1).padStart(2, "0")} // {file.name}</span>
+              <span className="label-tac shrink-0 pl-3">{index < completed ? "DONE" : formatBytes(file.size)}</span>
+            </div>
+          ))}
         </div>
       )}
 
       <button
         type="button"
-        disabled={!file || loading}
+        disabled={!files.length || loading}
         onClick={onRun}
         className="mt-3 w-full border border-primary/70 bg-primary/15 px-4 py-3 text-xs font-bold uppercase tracking-[0.25em] text-primary transition-colors hover:bg-primary/25 disabled:cursor-not-allowed disabled:border-border disabled:bg-transparent disabled:text-muted-foreground"
       >
-        {loading ? "Analyzing…" : "Run Analysis"}
+        {loading ? `Analyzing ${completed + 1}/${files.length}` : `Run Batch // ${files.length || 0}`}
       </button>
 
       {loading && (
@@ -104,9 +113,10 @@ export function UploadPanel({
       )}
 
       {(error || localError) && (
-        <p className="mt-3 border border-prio-high/60 bg-prio-high/10 px-3 py-2 text-[0.6875rem] uppercase leading-relaxed tracking-wider text-prio-high">
-          {error ?? localError}
-        </p>
+        <div className="mt-3 border border-prio-high/60 bg-prio-high/10 p-3">
+          <p className="text-[0.6875rem] uppercase leading-relaxed text-prio-high">{error ?? localError}</p>
+          {error && <button type="button" onClick={onRetry} className="mt-2 text-[10px] font-bold uppercase text-prio-high underline">Retry failed batch</button>}
+        </div>
       )}
     </section>
   );

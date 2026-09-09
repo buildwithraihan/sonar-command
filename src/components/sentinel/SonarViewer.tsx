@@ -37,11 +37,12 @@ export function SonarViewer({
   const sy = box.natH ? box.h / box.natH : 0;
 
   return (
-    <section className="panel scanline flex min-h-[420px] flex-col p-4">
+    <section className="panel scanline sonar-grid flex min-h-[440px] flex-col overflow-hidden p-4">
       <h2 className="label-tac mb-3 text-primary">[ Sonar Viewer ]</h2>
       {!imageUrl ? (
-        <div className="flex flex-1 items-center justify-center border border-dashed border-border">
-          <p className="label-tac animate-pulse text-primary">Awaiting Sonar Feed Input</p>
+        <div className="relative flex flex-1 items-center justify-center border border-dashed border-border">
+          <div className="crosshair" aria-hidden="true" />
+          <p className="label-tac z-10 text-primary">Awaiting Sonar Feed Input</p>
         </div>
       ) : (
         <div className="relative inline-block self-center">

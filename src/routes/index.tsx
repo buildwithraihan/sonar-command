@@ -4,7 +4,19 @@ import { UploadPanel } from "@/components/sentinel/UploadPanel";
 import { SonarViewer } from "@/components/sentinel/SonarViewer";
 import { DetectionsPanel } from "@/components/sentinel/DetectionsPanel";
 import { AnalyticsBar } from "@/components/sentinel/AnalyticsBar";
-import { analyzeImage, downloadFile, toCSV, type AnalyzeResponse, type Detection } from "@/lib/sentinel";
+import { IconRail } from "@/components/sentinel/IconRail";
+import { ClassificationMatrix, SessionLog, Telemetry } from "@/components/sentinel/CommandPanels";
+import {
+  analyzeImage,
+  combineResults,
+  downloadFile,
+  exportSessionPDF,
+  highestPriority,
+  toCSV,
+  type AnalyzeResponse,
+  type Detection,
+  type SessionRun,
+} from "@/lib/sentinel";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -19,7 +31,7 @@ export const Route = createFileRoute("/")({
       {
         property: "og:description",
         content:
-          "AI-powered sonar anomaly detection console with bounding-box overlays, priority triage and CSV/JSON export.",
+          "AI-powered sonar anomaly detection console with bounding-box overlays, priority triage and CSV/JSON/PDF export.",
       },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary_large_image" },
@@ -33,7 +45,7 @@ type Status = "STANDBY" | "ANALYZING" | "COMPLETE" | "ERROR";
 const STATUS_TONE: Record<Status, string> = {
   STANDBY: "text-muted-foreground",
   ANALYZING: "text-prio-medium",
-  COMPLETE: "text-primary",
+  COMPLETE: "text-signal",
   ERROR: "text-prio-high",
 };
 
@@ -42,12 +54,20 @@ function Sentinel() {
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [result, setResult] = useState<AnalyzeResponse | null>(null);
   const [selected, setSelected] = useState<Detection | null>(null);
+  const [runs, setRuns] = useState<SessionRun[]>([]);
   const [status, setStatus] = useState<Status>("STANDBY");
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
   const [completed, setCompleted] = useState(0);
   const [coldStart, setColdStart] = useState(false);
+  const [lastMs, setLastMs] = useState<number | null>(null);
+  const [clock, setClock] = useState(() => new Date());
   const urlRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    const t = setInterval(() => setClock(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
 
   useEffect(() => () => { if (urlRef.current) URL.revokeObjectURL(urlRef.current); }, []);
 
@@ -75,22 +95,29 @@ function Sentinel() {
 
     const started = Date.now();
     const tick = setInterval(() => {
-      const elapsed = Date.now() - started;
-      if (elapsed > 6000) setColdStart(true);
+      if (Date.now() - started > 6000) setColdStart(true);
       setProgress((p) => Math.min(p + (p < 60 ? 3 : 0.6), 95));
     }, 400);
 
     try {
-      const runs: AnalyzeResponse[] = [];
+      const batch: SessionRun[] = [];
       for (const file of files) {
-        runs.push(await analyzeImage(file));
-        setCompleted(runs.length);
+        const t0 = Date.now();
+        const data = await analyzeImage(file);
+        const ms = Date.now() - t0;
+        setLastMs(ms);
+        batch.push({
+          id: `${Date.now()}-${file.name}`,
+          timestamp: new Date().toISOString(),
+          filename: data.filename || file.name,
+          responseMs: ms,
+          highestPriority: highestPriority(data.detections),
+          result: data,
+        });
+        setCompleted(batch.length);
       }
-      setResult({
-        filename: runs.map((r) => r.filename).join(" + "),
-        total_detections: runs.reduce((t, r) => t + r.total_detections, 0),
-        detections: runs.flatMap((r) => r.detections),
-      });
+      setRuns((prev) => [...batch.reverse(), ...prev]);
+      setResult(combineResults(batch));
       setProgress(100);
       setStatus("COMPLETE");
     } catch (e) {
@@ -102,99 +129,130 @@ function Sentinel() {
     }
   };
 
+  const backend =
+    status === "ERROR" ? "DEGRADED" : lastMs !== null ? "LIVE" : "IDLE";
+  const totalDetections = runs.reduce((t, r) => t + r.result.total_detections, 0);
+
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-10 border-b border-border bg-background/90 backdrop-blur">
-        <div className="mx-auto flex max-w-[1500px] flex-wrap items-center justify-between gap-3 px-5 py-3">
+      <header className="sticky top-0 z-20 border-b border-border bg-background/92 backdrop-blur">
+        <div className="mx-auto flex max-w-[1600px] flex-wrap items-center justify-between gap-3 px-5 py-3">
           <div className="flex items-baseline gap-3">
-            <h1 className="text-xl font-bold uppercase tracking-[0.4em] text-primary">Sentinel</h1>
+            <h1 className="font-display text-xl font-bold uppercase tracking-[0.4em] text-primary">Sentinel</h1>
             <p className="label-tac">Underwater Intelligence System</p>
           </div>
-          <div className="flex items-center gap-2 border border-border px-3 py-1.5">
-            <span
-              className={`inline-block h-2 w-2 ${status === "ANALYZING" ? "animate-pulse" : ""}`}
-              style={{
-                background:
-                  status === "ERROR"
-                    ? "var(--prio-high)"
-                    : status === "ANALYZING"
-                      ? "var(--prio-medium)"
-                      : status === "COMPLETE"
-                        ? "var(--prio-low)"
-                        : "var(--muted-foreground)",
-              }}
-            />
-            <span className={`text-[11px] uppercase tracking-[0.2em] ${STATUS_TONE[status]}`}>
-              {status}
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="status-chip">
+              <i className={`h-2 w-2 ${backend === "LIVE" ? "bg-signal" : backend === "DEGRADED" ? "bg-prio-high" : "bg-muted-foreground"}`} />
+              Node {backend}
             </span>
+            <span className="status-chip">Runs {runs.length}</span>
+            <span className="status-chip">Contacts {totalDetections}</span>
+            <span className="status-chip">
+              Last {runs[0] ? new Date(runs[0].timestamp).toLocaleTimeString([], { hour12: false }) : "—"}
+            </span>
+            <span className="status-chip text-primary">
+              {clock.toISOString().slice(0, 10)} {clock.toLocaleTimeString([], { hour12: false })}Z
+            </span>
+            <span className={`status-chip ${STATUS_TONE[status]}`}>{status}</span>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto max-w-[1500px] space-y-4 px-5 py-5">
-        {result && <AnalyticsBar result={result} />}
+      <div className="mx-auto flex max-w-[1600px] gap-4 px-5">
+        <IconRail />
 
-        <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
-          <div className="space-y-4">
-            <UploadPanel
-              files={files}
-              onFiles={selectFiles}
-              onRun={run}
-              onRetry={run}
-              loading={status === "ANALYZING"}
-              progress={progress}
-              completed={completed}
-              coldStart={coldStart}
-              error={error}
-            />
+        <main className="min-w-0 flex-1 space-y-4 py-5">
+          <section id="analytics">{result && <AnalyticsBar result={result} />}</section>
 
-            {result && (
-              <section className="panel p-4">
+          <div className="grid gap-4 xl:grid-cols-[340px_1fr_340px]">
+            <div id="upload" className="space-y-4">
+              <UploadPanel
+                files={files}
+                onFiles={selectFiles}
+                onRun={run}
+                onRetry={run}
+                loading={status === "ANALYZING"}
+                progress={progress}
+                completed={completed}
+                coldStart={coldStart}
+                error={error}
+              />
+
+              <section id="export" className="panel p-4">
                 <h2 className="label-tac mb-3 text-primary">[ Export ]</h2>
                 <div className="grid grid-cols-2 gap-2">
-                  <button
-                    type="button"
+                  <ExportButton
+                    disabled={!result}
+                    label="Export CSV"
+                    onClick={() => result && downloadFile(toCSV(result), `sentinel-${result.filename}.csv`, "text/csv")}
+                  />
+                  <ExportButton
+                    disabled={!result}
+                    label="Export JSON"
                     onClick={() =>
-                      downloadFile(toCSV(result), `sentinel-${result.filename}.csv`, "text/csv")
+                      result &&
+                      downloadFile(JSON.stringify(result, null, 2), `sentinel-${result.filename}.json`, "application/json")
                     }
-                    className="border border-border px-3 py-2 text-[11px] uppercase tracking-[0.2em] text-foreground transition-colors hover:border-border-bright hover:text-primary"
-                  >
-                    Export CSV
-                  </button>
-                  <button
-                    type="button"
+                  />
+                  <ExportButton
+                    disabled={!runs.length}
+                    label="Session PDF"
+                    onClick={() => exportSessionPDF(runs)}
+                  />
+                  <ExportButton
+                    disabled={!runs.length}
+                    label="Session JSON"
                     onClick={() =>
-                      downloadFile(
-                        JSON.stringify(result, null, 2),
-                        `sentinel-${result.filename}.json`,
-                        "application/json",
-                      )
+                      downloadFile(JSON.stringify(runs, null, 2), `sentinel-session-${Date.now()}.json`, "application/json")
                     }
-                    className="border border-border px-3 py-2 text-[11px] uppercase tracking-[0.2em] text-foreground transition-colors hover:border-border-bright hover:text-primary"
-                  >
-                    Export JSON
-                  </button>
+                  />
                 </div>
               </section>
-            )}
-          </div>
 
-          <div className="space-y-4">
-            <SonarViewer imageUrl={result ? imageUrl : null} detections={result?.detections ?? []} />
-            {result && (
-              <DetectionsPanel
-                detections={result.detections}
-                selected={selected}
-                onSelect={setSelected}
-              />
-            )}
+              <section id="settings" className="panel p-4">
+                <h2 className="label-tac mb-3 text-primary">[ Endpoint ]</h2>
+                <p className="break-all text-[11px] text-muted-foreground">
+                  {import.meta.env["VITE_API_URL"] ?? "https://sentinel-2h7a.onrender.com"}/analyze
+                </p>
+                <p className="label-tac mt-2">Timeout 45s // multipart field: file</p>
+              </section>
+            </div>
+
+            <div className="min-w-0 space-y-4">
+              <SonarViewer imageUrl={result ? imageUrl : null} detections={result?.detections ?? []} />
+              {result && (
+                <DetectionsPanel detections={result.detections} selected={selected} onSelect={setSelected} />
+              )}
+            </div>
+
+            <div className="space-y-4">
+              <ClassificationMatrix detection={selected} />
+              <Telemetry status={backend} lastMs={lastMs} total={runs.length} />
+              <div id="history">
+                <SessionLog runs={runs} />
+              </div>
+            </div>
           </div>
-        </div>
-      </main>
+        </main>
+      </div>
 
       <footer className="border-t border-border px-5 py-4 text-center">
         <p className="label-tac">Sentinel v1.0 — Classification: Restricted</p>
       </footer>
     </div>
+  );
+}
+
+function ExportButton({ label, onClick, disabled }: { label: string; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={onClick}
+      className="border border-border px-3 py-2 text-[10px] uppercase tracking-[0.2em] text-foreground transition-colors hover:border-border-bright hover:text-primary disabled:cursor-not-allowed disabled:text-muted-foreground disabled:hover:border-border"
+    >
+      {label}
+    </button>
   );
 }

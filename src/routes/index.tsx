@@ -4,7 +4,7 @@ import { UploadPanel } from "@/components/sentinel/UploadPanel";
 import { SonarViewer } from "@/components/sentinel/SonarViewer";
 import { DetectionsPanel } from "@/components/sentinel/DetectionsPanel";
 import { AnalyticsBar } from "@/components/sentinel/AnalyticsBar";
-import { analyzeImage, downloadFile, toCSV, type AnalyzeResponse } from "@/lib/sentinel";
+import { analyzeImage, downloadFile, toCSV, type AnalyzeResponse, type Detection } from "@/lib/sentinel";
 
 export const Route = createFileRoute("/")({
   head: () => ({
@@ -38,32 +38,38 @@ const STATUS_TONE: Record<Status, string> = {
 };
 
 function Sentinel() {
-  const [file, setFile] = useState<File | null>(null);
+  const [files, setFiles] = useState<File[]>([]);
   const [imageUrl, setImageUrl] = useState<string | null>(null);
   const [result, setResult] = useState<AnalyzeResponse | null>(null);
+  const [selected, setSelected] = useState<Detection | null>(null);
   const [status, setStatus] = useState<Status>("STANDBY");
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
+  const [completed, setCompleted] = useState(0);
   const [coldStart, setColdStart] = useState(false);
   const urlRef = useRef<string | null>(null);
 
   useEffect(() => () => { if (urlRef.current) URL.revokeObjectURL(urlRef.current); }, []);
 
-  const selectFile = (f: File | null) => {
-    setFile(f);
+  const selectFiles = (incoming: File[]) => {
+    setFiles(incoming);
     setResult(null);
+    setSelected(null);
     setError(null);
+    setCompleted(0);
     setStatus("STANDBY");
     if (urlRef.current) URL.revokeObjectURL(urlRef.current);
-    urlRef.current = f ? URL.createObjectURL(f) : null;
+    urlRef.current = incoming[0] ? URL.createObjectURL(incoming[0]) : null;
     setImageUrl(urlRef.current);
   };
 
   const run = async () => {
-    if (!file) return;
+    if (!files.length) return;
     setStatus("ANALYZING");
     setError(null);
     setResult(null);
+    setSelected(null);
+    setCompleted(0);
     setProgress(4);
     setColdStart(false);
 
@@ -75,8 +81,16 @@ function Sentinel() {
     }, 400);
 
     try {
-      const data = await analyzeImage(file);
-      setResult(data);
+      const runs: AnalyzeResponse[] = [];
+      for (const file of files) {
+        runs.push(await analyzeImage(file));
+        setCompleted(runs.length);
+      }
+      setResult({
+        filename: runs.map((r) => r.filename).join(" + "),
+        total_detections: runs.reduce((t, r) => t + r.total_detections, 0),
+        detections: runs.flatMap((r) => r.detections),
+      });
       setProgress(100);
       setStatus("COMPLETE");
     } catch (e) {
@@ -123,11 +137,13 @@ function Sentinel() {
         <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
           <div className="space-y-4">
             <UploadPanel
-              file={file}
-              onFile={selectFile}
+              files={files}
+              onFiles={selectFiles}
               onRun={run}
+              onRetry={run}
               loading={status === "ANALYZING"}
               progress={progress}
+              completed={completed}
               coldStart={coldStart}
               error={error}
             />
@@ -165,7 +181,13 @@ function Sentinel() {
 
           <div className="space-y-4">
             <SonarViewer imageUrl={result ? imageUrl : null} detections={result?.detections ?? []} />
-            {result && <DetectionsPanel detections={result.detections} />}
+            {result && (
+              <DetectionsPanel
+                detections={result.detections}
+                selected={selected}
+                onSelect={setSelected}
+              />
+            )}
           </div>
         </div>
       </main>

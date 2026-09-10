@@ -215,7 +215,7 @@ function Sentinel() {
                 <p className="break-all text-[11px] text-muted-foreground">
                   {import.meta.env["VITE_API_URL"] ?? "https://sentinel-2h7a.onrender.com"}/analyze
                 </p>
-                <p className="label-tac mt-2">Timeout 45s // multipart field: file</p>
+                <p className="label-tac mt-2">Timeout 120s // multipart field: file</p>
               </section>
             </div>
 

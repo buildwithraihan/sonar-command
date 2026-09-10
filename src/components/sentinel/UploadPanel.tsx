@@ -105,9 +105,7 @@ export function UploadPanel({
             />
           </div>
           <p className="label-tac mt-2 animate-pulse text-primary">
-            {coldStart
-              ? "Waking up analysis node — free-tier cold start, up to 60s…"
-              : "Transmitting frame to analysis node…"}
+            ANALYZING SONAR FEED — THIS MAY TAKE UP TO A MINUTE
           </p>
         </div>
       )}

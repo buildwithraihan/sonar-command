@@ -26,7 +26,7 @@ export interface SessionRun {
 
 const API_URL = import.meta.env["VITE_API_URL"] ?? "https://sentinel-2h7a.onrender.com";
 
-export async function analyzeImage(file: File, timeoutMs = 45000): Promise<AnalyzeResponse> {
+export async function analyzeImage(file: File, timeoutMs = 120000): Promise<AnalyzeResponse> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   const body = new FormData();
@@ -45,7 +45,7 @@ export async function analyzeImage(file: File, timeoutMs = 45000): Promise<Analy
   } catch (err) {
     if (err instanceof DOMException && err.name === "AbortError") {
       throw new Error(
-        "REQUEST TIMED OUT AFTER 45s — ANALYSIS NODE UNREACHABLE OR STILL COLD. RETRY TRANSMISSION.",
+        "REQUEST TIMED OUT AFTER 120s — ANALYSIS NODE UNREACHABLE OR STILL COLD. RETRY TRANSMISSION.",
       );
     }
     if (err instanceof TypeError) {

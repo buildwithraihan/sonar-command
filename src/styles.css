@@ -40,26 +40,29 @@
   --color-prio-high: var(--prio-high);
   --color-prio-medium: var(--prio-medium);
   --color-prio-low: var(--prio-low);
+  --color-signal: var(--signal);
+  --font-display: "Space Grotesk", ui-sans-serif, system-ui, sans-serif;
   --font-mono:
     "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
   --font-sans:
-    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    "DM Sans", ui-sans-serif, system-ui, sans-serif;
 }
 
 :root {
-  --background: oklch(0.11 0.032 255);
+  --background: #050a0e;
   --foreground: oklch(0.93 0.015 220);
-  --panel: oklch(0.145 0.033 253);
-  --panel-raised: oklch(0.185 0.035 253);
-  --primary: oklch(0.79 0.148 210);
-  --primary-foreground: oklch(0.11 0.032 255);
-  --muted: oklch(0.19 0.03 253);
-  --muted-foreground: oklch(0.63 0.035 225);
-  --border: oklch(0.29 0.04 240 / 60%);
+  --panel: #0b1720;
+  --panel-raised: oklch(0.21 0.035 235);
+  --primary: #18cbe8;
+  --primary-foreground: #050a0e;
+  --muted: oklch(0.19 0.03 240);
+  --muted-foreground: oklch(0.66 0.032 225);
+  --border: oklch(0.32 0.04 235 / 65%);
   --border-bright: oklch(0.79 0.148 210 / 45%);
-  --prio-high: oklch(0.64 0.225 26);
+  --signal: #67ef79;
+  --prio-high: #ef5964;
   --prio-medium: oklch(0.8 0.16 76);
-  --prio-low: oklch(0.79 0.148 210);
+  --prio-low: #67ef79;
 }
 
 @layer base {
@@ -89,6 +92,52 @@
   text-transform: uppercase;
   letter-spacing: 0.18em;
   color: var(--muted-foreground);
+}
+
+@utility status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.375rem;
+  border: 1px solid var(--border);
+  padding: 0.125rem 0.5rem;
+  font-size: 0.625rem;
+  text-transform: uppercase;
+  letter-spacing: 0.18em;
+}
+
+@utility rail-button {
+  display: flex;
+  height: 2.25rem;
+  width: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid transparent;
+  color: var(--muted-foreground);
+  transition: all 0.15s ease;
+
+  &:hover {
+    border-color: var(--border-bright);
+    color: var(--primary);
+    background-color: color-mix(in oklab, var(--primary) 12%, transparent);
+  }
+}
+
+@utility rail-button-active {
+  border-color: var(--border-bright);
+  color: var(--primary);
+  background-color: color-mix(in oklab, var(--primary) 14%, transparent);
+}
+
+@utility matrix-grid {
+  height: 0.375rem;
+  width: 100%;
+  background-color: color-mix(in oklab, var(--panel-raised) 90%, transparent);
+
+  & > span {
+    display: block;
+    height: 100%;
+    background-color: var(--signal);
+  }
 }
 
 @utility scanline {

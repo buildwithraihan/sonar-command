@@ -137,11 +137,13 @@ function Sentinel() {
         <div className="grid gap-4 lg:grid-cols-[360px_1fr]">
           <div className="space-y-4">
             <UploadPanel
-              file={file}
-              onFile={selectFile}
+              files={files}
+              onFiles={selectFiles}
               onRun={run}
+              onRetry={run}
               loading={status === "ANALYZING"}
               progress={progress}
+              completed={completed}
               coldStart={coldStart}
               error={error}
             />
@@ -179,7 +181,13 @@ function Sentinel() {
 
           <div className="space-y-4">
             <SonarViewer imageUrl={result ? imageUrl : null} detections={result?.detections ?? []} />
-            {result && <DetectionsPanel detections={result.detections} />}
+            {result && (
+              <DetectionsPanel
+                detections={result.detections}
+                selected={selected}
+                onSelect={setSelected}
+              />
+            )}
           </div>
         </div>
       </main>
